@@ -1,7 +1,7 @@
-use anchor_lang::prelude::*;
-
 use crate::errors::PaymentError;
 use crate::states::*;
+use anchor_lang::prelude::*;
+use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 
 #[derive(Accounts)]
 pub struct AdminUpdateOracle<'info> {
@@ -23,7 +23,7 @@ pub struct AdminUpdateOracle<'info> {
     pub allowed_token_config: Box<Account<'info, AllowedTokenConfig>>,
     /// CHECK: Pyth oracle for the token
     #[account()]
-    pub pyth_oracle: UncheckedAccount<'info>,
+    pub pyth_oracle: Box<Account<'info, PriceUpdateV2>>,
 }
 
 pub fn handler(ctx: Context<AdminUpdateOracle>) -> Result<()> {
