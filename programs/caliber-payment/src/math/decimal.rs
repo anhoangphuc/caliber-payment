@@ -13,7 +13,6 @@
 #![allow(clippy::manual_range_contains)]
 
 use crate::{errors::PaymentError, math::common::*};
-use anchor_lang::solana_program::program_error::ProgramError;
 use std::{convert::TryFrom, fmt};
 use uint::construct_uint;
 

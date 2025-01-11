@@ -1,4 +1,7 @@
 use anchor_lang::prelude::*;
+use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
+
+use crate::math::{Decimal, TryDiv};
 
 #[account]
 pub struct AllowedTokenConfig {
@@ -35,5 +38,15 @@ impl AllowedTokenConfig {
         self.pyth_oracle = pyth_oracle;
         self.pyth_feed_id = pyth_feed_id;
         Ok(())
+    }
+
+    pub fn get_price(&self, price_update: &PriceUpdateV2) -> Result<Decimal> {
+        let clock = Clock::get()?;
+        let maximum_age = 1000000000000000000;
+        let price =
+            price_update.get_price_no_older_than(&clock, maximum_age, &self.pyth_feed_id)?;
+        let expo = 10_u64.pow(-price.exponent as u32);
+        let resolved_price = Decimal::from(price.price as u64).try_div(Decimal::from(expo))?;
+        Ok(resolved_price)
     }
 }

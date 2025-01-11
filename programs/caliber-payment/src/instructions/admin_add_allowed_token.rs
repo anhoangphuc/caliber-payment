@@ -35,18 +35,15 @@ pub struct AdminAddAllowedToken<'info> {
 pub fn handler(ctx: Context<AdminAddAllowedToken>, feed_ix_hed: &str) -> Result<()> {
     let allowed_token_config = &mut ctx.accounts.allowed_token_config;
     let price_update = &ctx.accounts.pyth_oracle;
-    let maximum_age = 1000000000000000000;
     let feed_id: [u8; 32] = get_feed_id_from_hex(feed_ix_hed)?;
-    let clock = Clock::get()?;
-    let price = price_update.get_price_no_older_than(&clock, maximum_age, &feed_id)?;
-
-    msg!("Price: {:?}", price);
 
     allowed_token_config.initialize(
         ctx.accounts.token.key(),
         ctx.accounts.pyth_oracle.key(),
         feed_id,
     )?;
+
+    allowed_token_config.get_price(price_update)?;
 
     Ok(())
 }
