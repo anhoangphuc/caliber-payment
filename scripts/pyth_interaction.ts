@@ -9,6 +9,10 @@ const wallet: Wallet = new Wallet(Keypair.generate());
 const pythSolanaReceiver = new PythSolanaReceiver({ connection, wallet });
 
 const SOL_PRICE_FEED_ID = "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d";
+
+const SOL_PRICE_FEED_ID_BUFFER = Buffer.from(SOL_PRICE_FEED_ID.slice(2), 'hex');
+console.log(SOL_PRICE_FEED_ID_BUFFER);
+
  
 // There are up to 2^16 different accounts for any given price feed id.
 // The 0 value below is the shard id that indicates which of these accounts you would like to use.

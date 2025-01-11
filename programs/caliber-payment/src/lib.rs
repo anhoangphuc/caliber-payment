@@ -17,8 +17,11 @@ pub mod caliber_payment {
         admin_initialize::handler(ctx, protocol_fee_rate)
     }
 
-    pub fn admin_add_allowed_token(ctx: Context<AdminAddAllowedToken>) -> Result<()> {
-        admin_add_allowed_token::handler(ctx)
+    pub fn admin_add_allowed_token(
+        ctx: Context<AdminAddAllowedToken>,
+        feed_id_hex: String,
+    ) -> Result<()> {
+        admin_add_allowed_token::handler(ctx, &feed_id_hex)
     }
 
     pub fn admin_update_allowed_token_enabled_status(
@@ -28,7 +31,10 @@ pub mod caliber_payment {
         admin_update_enabled_status::handler(ctx, enabled)
     }
 
-    pub fn admin_update_allowed_token_oracle(ctx: Context<AdminUpdateOracle>) -> Result<()> {
-        admin_update_oracle::handler(ctx)
+    pub fn admin_update_allowed_token_oracle(
+        ctx: Context<AdminUpdateOracle>,
+        feed_id_hex: String,
+    ) -> Result<()> {
+        admin_update_oracle::handler(ctx, &feed_id_hex)
     }
 }
