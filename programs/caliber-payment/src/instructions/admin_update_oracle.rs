@@ -1,15 +1,16 @@
-use crate::errors::PaymentError;
-use crate::states::*;
 use anchor_lang::prelude::*;
 
+use crate::errors::PaymentError;
+use crate::states::*;
+
 #[derive(Accounts)]
-pub struct AdminUpdateEnabledStatus<'info> {
+pub struct AdminUpdateOracle<'info> {
     #[account(
-        mut,
         address = config.admin @ PaymentError::InvalidAdmin,
     )]
     pub admin: Signer<'info>,
     #[account(
+        mut,
         seeds = [Config::SEEDS.as_bytes()],
         bump,
     )]
@@ -20,10 +21,13 @@ pub struct AdminUpdateEnabledStatus<'info> {
         bump,
     )]
     pub allowed_token_config: Box<Account<'info, AllowedTokenConfig>>,
+    /// CHECK: Pyth oracle for the token
+    #[account()]
+    pub pyth_oracle: UncheckedAccount<'info>,
 }
 
-pub fn handler(ctx: Context<AdminUpdateEnabledStatus>, enabled: bool) -> Result<()> {
+pub fn handler(ctx: Context<AdminUpdateOracle>) -> Result<()> {
     let allowed_token_config = &mut ctx.accounts.allowed_token_config;
-    allowed_token_config.update_enabled_status(enabled)?;
+    allowed_token_config.update_oracle(ctx.accounts.pyth_oracle.key())?;
     Ok(())
 }

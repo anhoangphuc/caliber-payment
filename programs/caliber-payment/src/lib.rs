@@ -27,4 +27,8 @@ pub mod caliber_payment {
     ) -> Result<()> {
         admin_update_enabled_status::handler(ctx, enabled)
     }
+
+    pub fn admin_update_allowed_token_oracle(ctx: Context<AdminUpdateOracle>) -> Result<()> {
+        admin_update_oracle::handler(ctx)
+    }
 }

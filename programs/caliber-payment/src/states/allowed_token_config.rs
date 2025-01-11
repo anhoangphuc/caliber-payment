@@ -24,4 +24,9 @@ impl AllowedTokenConfig {
         self.enabled = enabled;
         Ok(())
     }
+
+    pub fn update_oracle(&mut self, pyth_oracle: Pubkey) -> Result<()> {
+        self.pyth_oracle = pyth_oracle;
+        Ok(())
+    }
 }

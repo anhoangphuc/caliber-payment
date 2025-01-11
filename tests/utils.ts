@@ -32,6 +32,7 @@ export async function delay(ms: number) {
 export const CONSTANTS = {
     CONFIG_SEED: "CONFIG",
     FEE_RECIPIENT_SEED: "FEE_RECIPIENT",
+    ALLOWED_TOKEN_CONFIG_SEED: "ALLOWED_TOKEN",
 }
 
 export async function getBlockTime(connection: Connection) {
