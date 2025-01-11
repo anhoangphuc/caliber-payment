@@ -15,4 +15,12 @@ pub enum PaymentError {
     UnsupportedToken,
     #[msg("Invalid price range")]
     InvalidPriceRange,
+    #[msg("Invalid oracle config")]
+    InvalidOracleConfig,
+    #[msg("Order expired")]
+    OrderExpired,
+    #[msg("Out of price range")]
+    OutOfPriceRange,
+    #[msg("No token x amount")]
+    NoTokenXAmount,
 }

@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey, ComputeBudgetProgram, Transaction } from "@solana/web3.js";
 import { createMint, getAssociatedTokenAddress } from "@solana/spl-token";
 import { CaliberPayment } from "../target/types/caliber_payment";
 import { airdropSol, airdropToken, CONSTANTS } from "./utils";
@@ -10,6 +10,7 @@ describe("caliber-payment", () => {
   const connection = new Connection('http://127.0.0.1:8899', 'confirmed');
   const admin = anchor.web3.Keypair.generate();
   const user = anchor.web3.Keypair.generate();
+  const user2 = anchor.web3.Keypair.generate();
   const provider = new anchor.AnchorProvider(connection, new anchor.Wallet(admin), { commitment: 'confirmed' });
   anchor.setProvider(provider);
 
@@ -20,13 +21,15 @@ describe("caliber-payment", () => {
   let solanaMint: PublicKey;
   let raydiumMint: PublicKey;
   const xAmount = 5;
+  const order = anchor.web3.Keypair.generate();
   before(async () => {
     await airdropSol(connection, admin.publicKey, 100);
     await airdropSol(connection, user.publicKey, 100);
+    await airdropSol(connection, user2.publicKey, 100);
     solanaMint = await createMint(provider.connection, admin, admin.publicKey, admin.publicKey, solanaDecimals);
     raydiumMint = await createMint(provider.connection, admin, admin.publicKey, admin.publicKey, raydiumDecimals);
     await airdropToken(provider, admin, user.publicKey, solanaMint, 1000 * 10 ** solanaDecimals);
-    await airdropToken(provider, admin, user.publicKey, raydiumMint, 1000 * 10 ** raydiumDecimals);
+    await airdropToken(provider, admin, user2.publicKey, raydiumMint, 1000 * 10 ** raydiumDecimals);
   });
 
   it("Is initialized!", async () => {
@@ -88,7 +91,6 @@ describe("caliber-payment", () => {
 
   it("User make order to buy raydium using solana", async () => {
     // Add your test here.
-    const order = anchor.web3.Keypair.generate();
     const [config] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from(CONSTANTS.CONFIG_SEED)],
       program.programId,
@@ -153,6 +155,53 @@ describe("caliber-payment", () => {
     const orderTokenXAccountBalance = await provider.connection.getTokenAccountBalance(orderTokenXAccount);
     assert.equal(orderTokenXAccountBalance.value.amount, (xAmount * 10 ** solanaDecimals).toString(), "Order token X account balance is not set correctly");
   });
+
+  it('User match order', async () => {
+    const yAmount = new BN(200 * 10 ** raydiumDecimals);
+    const [orderAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ORDER_AUTHORITY_SEED), order.publicKey.toBuffer()],
+      program.programId,
+    );
+    const user2TokenXAccount = await getAssociatedTokenAddress(solanaMint, user2.publicKey);
+    const user2TokenYAccount = await getAssociatedTokenAddress(raydiumMint, user2.publicKey);
+    const orderTokenXAccount = await getAssociatedTokenAddress(solanaMint, orderAuthority, true);
+    const orderTokenYAccount = await getAssociatedTokenAddress(raydiumMint, orderAuthority, true);
+    const [solanaAllowedTokenConfig] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), solanaMint.toBuffer()],
+      program.programId,
+    );
+    const [raydiumAllowedTokenConfig] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), raydiumMint.toBuffer()],
+      program.programId,
+    );
+
+    try {
+      const computeBudgetIns = ComputeBudgetProgram.setComputeUnitLimit({
+        units: 1000000,
+      });
+      const matchOrderIns = await program.methods.userMatchOrder(yAmount).accounts({
+        user: user2.publicKey,
+        userTokenXAccount: user2TokenXAccount,
+        userTokenYAccount: user2TokenYAccount,
+        order: order.publicKey,
+        orderAuthority,
+        orderTokenXAccount,
+        orderTokenYAccount,
+        tokenX: solanaMint,
+        tokenY: raydiumMint,
+        tokenXConfig: solanaAllowedTokenConfig,
+        tokenYConfig: raydiumAllowedTokenConfig,
+        tokenXPythOracle: CONSTANTS.PYTH_ORACLE.SOL.KEY,
+        tokenYPythOracle: CONSTANTS.PYTH_ORACLE.RAYDIUM.KEY,
+      })
+        .instruction()
+      const transaction = new Transaction().add(computeBudgetIns, matchOrderIns);
+      const tx = await provider.sendAndConfirm(transaction, [user2], { commitment: 'confirmed' });
+      console.log("User match order success at", tx);
+    } catch (error) {
+      console.log(error);
+    }
+  })
 });
 
 

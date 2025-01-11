@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::*;
-use crate::math::PRICE_SCALER;
+use crate::math::{Decimal, TryDiv, PRICE_SCALER};
 use crate::CreateOrderParams;
 
 #[account]
@@ -46,5 +46,23 @@ impl Order {
         self.max_y_price = param.max_y_price;
 
         Ok(())
+    }
+
+    pub fn is_expired(&self) -> Result<bool> {
+        let now = Clock::get()?.unix_timestamp as u64;
+        Ok(now > self.expired_at)
+    }
+
+    pub fn price_in_range(&self, token_x_price: Decimal, token_y_price: Decimal) -> Result<bool> {
+        let price_scaler = Decimal::from(PRICE_SCALER);
+        let min_x_price = Decimal::from(self.min_x_price).try_div(price_scaler)?;
+        let max_x_price = Decimal::from(self.max_x_price).try_div(price_scaler)?;
+        let min_y_price = Decimal::from(self.min_y_price).try_div(price_scaler)?;
+        let max_y_price = Decimal::from(self.max_y_price).try_div(price_scaler)?;
+
+        Ok(token_x_price >= min_x_price
+            && token_x_price <= max_x_price
+            && token_y_price >= min_y_price
+            && token_y_price <= max_y_price)
     }
 }

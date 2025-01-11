@@ -45,4 +45,8 @@ pub mod caliber_payment {
     ) -> Result<()> {
         users::user_create_order::handler(ctx, params)
     }
+
+    pub fn user_match_order(ctx: Context<UserMatchOrder>, y_amount: u64) -> Result<()> {
+        users::user_match_order::handler(ctx, y_amount)
+    }
 }
