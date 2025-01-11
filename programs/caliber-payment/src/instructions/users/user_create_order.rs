@@ -22,7 +22,9 @@ pub struct UserCreateOrder<'info> {
     pub order_authority: AccountInfo<'info>,
     #[account()]
     pub token_x: Box<Account<'info, Mint>>,
-    #[account()]
+    #[account(
+        constraint = token_x.key() != token_y.key() @ PaymentError::InvalidTokenPair,
+    )]
     pub token_y: Box<Account<'info, Mint>>,
     #[account(
         mut,
@@ -63,8 +65,6 @@ pub struct UserCreateOrder<'info> {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Debug)]
 pub struct CreateOrderParams {
-    pub token_x_mint: Pubkey,
-    pub token_y_mint: Pubkey,
     pub min_x_price: u64,
     pub max_x_price: u64,
     pub min_y_price: u64,
@@ -75,7 +75,9 @@ pub struct CreateOrderParams {
 
 pub fn handler(ctx: Context<UserCreateOrder>, params: CreateOrderParams) -> Result<()> {
     let order = &mut ctx.accounts.order;
-    order.initialize(ctx.accounts.user.key(), &params)?;
+    let token_x_mint = ctx.accounts.token_x.key();
+    let token_y_mint = ctx.accounts.token_y.key();
+    order.initialize(ctx.accounts.user.key(), &params, token_x_mint, token_y_mint)?;
     let transfer_ctx = CpiContext::new(
         ctx.accounts.token_program.to_account_info(),
         Transfer {

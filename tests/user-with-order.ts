@@ -20,7 +20,7 @@ describe("caliber-payment", () => {
   const raydiumDecimals = 6;
   let solanaMint: PublicKey;
   let raydiumMint: PublicKey;
-  const xAmount = 5;
+  const xAmount = new BN(5 * 10 ** solanaDecimals);
   const order = anchor.web3.Keypair.generate();
   before(async () => {
     await airdropSol(connection, admin.publicKey, 100);
@@ -89,6 +89,56 @@ describe("caliber-payment", () => {
     console.log("Admin add allowed token for raydium success at", tx2);
   });
 
+  it("User make order failed to invalid price range", async () => {
+    // Add your test here.
+    const [solanaAllowedTokenConfig] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), solanaMint.toBuffer()],
+      program.programId,
+    );
+    const [raydiumAllowedTokenConfig] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), raydiumMint.toBuffer()],
+      program.programId,
+    );
+    const [orderAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ORDER_AUTHORITY_SEED), order.publicKey.toBuffer()],
+      program.programId,
+    )
+    const userTokenXAccount = await getAssociatedTokenAddress(solanaMint, user.publicKey);
+    const orderTokenXAccount = await getAssociatedTokenAddress(solanaMint, orderAuthority, true);
+    const orderTokenYAccount = await getAssociatedTokenAddress(raydiumMint, orderAuthority, true);
+    const mintXMinPrice = new BN(150 * CONSTANTS.PRICE_SCALER);
+    const mintYMinPrice = new BN(3 * CONSTANTS.PRICE_SCALER);
+    const mintXMaxPrice = new BN(250 * CONSTANTS.PRICE_SCALER);
+    const mintYMaxPrice = new BN(6 * CONSTANTS.PRICE_SCALER);
+
+    try {
+      const tx = await program.methods.userCreateOrder({
+        minXPrice: mintXMinPrice,
+        maxXPrice: mintXMaxPrice,
+        minYPrice: mintYMaxPrice,
+        maxYPrice: mintYMinPrice,
+        amount: xAmount,
+        validityDuration: new BN(30),
+      }).accounts({
+        user: user.publicKey,
+        order: order.publicKey,
+        orderAuthority,
+        tokenX: solanaMint,
+        tokenY: raydiumMint,
+        tokenXConfig: solanaAllowedTokenConfig,
+        tokenYConfig: raydiumAllowedTokenConfig,
+        userTokenXAccount,
+        orderTokenXAccount,
+        orderTokenYAccount,
+      })
+        .signers([order, user])
+        .rpc({ commitment: 'confirmed' });
+      assert.fail("User create order should fail");
+    } catch (e) {
+      assert.equal(e.error.errorCode.code, "InvalidPriceRange", "Invalid price range");
+    }
+  });
+
   it("User make order to buy raydium using solana", async () => {
     // Add your test here.
     const [config] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -117,13 +167,11 @@ describe("caliber-payment", () => {
 
     try {
       const tx = await program.methods.userCreateOrder({
-        tokenXMint: solanaMint,
-        tokenYMint: raydiumMint,
         minXPrice: mintXMinPrice,
         maxXPrice: mintXMaxPrice,
         minYPrice: mintYMinPrice,
         maxYPrice: mintYMaxPrice,
-        amount: new BN(xAmount * 10 ** solanaDecimals),
+        amount: xAmount,
         validityDuration: new BN(30),
       }).accounts({
         user: user.publicKey,
@@ -153,11 +201,108 @@ describe("caliber-payment", () => {
     assert.equal(orderAccount.minYPrice.toNumber(), mintYMinPrice.toNumber(), "Min Y price is not set correctly");
     assert.equal(orderAccount.maxYPrice.toNumber(), mintYMaxPrice.toNumber(), "Max Y price is not set correctly");
     const orderTokenXAccountBalance = await provider.connection.getTokenAccountBalance(orderTokenXAccount);
-    assert.equal(orderTokenXAccountBalance.value.amount, (xAmount * 10 ** solanaDecimals).toString(), "Order token X account balance is not set correctly");
+    assert.equal(orderTokenXAccountBalance.value.amount, xAmount.toString(), "Order token X account balance is not set correctly");
   });
 
-  it('User match order', async () => {
-    const yAmount = new BN(200 * 10 ** raydiumDecimals);
+  it('User match order with 150 raydium for 3.75 SOL', async () => {
+    const yAmount = new BN(150 * 10 ** raydiumDecimals);
+    const [orderAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ORDER_AUTHORITY_SEED), order.publicKey.toBuffer()],
+      program.programId,
+    );
+    const user2TokenXAccount = await getAssociatedTokenAddress(solanaMint, user2.publicKey);
+    const user2TokenYAccount = await getAssociatedTokenAddress(raydiumMint, user2.publicKey);
+    const user2TokenYBalanceBefore = Number((await provider.connection.getTokenAccountBalance(user2TokenYAccount)).value.amount);
+    const orderTokenXAccount = await getAssociatedTokenAddress(solanaMint, orderAuthority, true);
+    const orderTokenYAccount = await getAssociatedTokenAddress(raydiumMint, orderAuthority, true);
+    const [solanaAllowedTokenConfig] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), solanaMint.toBuffer()],
+      program.programId,
+    );
+    const [raydiumAllowedTokenConfig] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), raydiumMint.toBuffer()],
+      program.programId,
+    );
+
+    const computeBudgetIns = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1000000,
+    });
+    const matchOrderIns = await program.methods.userMatchOrder(yAmount).accounts({
+      user: user2.publicKey,
+      userTokenXAccount: user2TokenXAccount,
+      userTokenYAccount: user2TokenYAccount,
+      order: order.publicKey,
+      orderAuthority,
+      orderTokenXAccount,
+      orderTokenYAccount,
+      tokenX: solanaMint,
+      tokenY: raydiumMint,
+      tokenXConfig: solanaAllowedTokenConfig,
+      tokenYConfig: raydiumAllowedTokenConfig,
+      tokenXPythOracle: CONSTANTS.PYTH_ORACLE.SOL.KEY,
+      tokenYPythOracle: CONSTANTS.PYTH_ORACLE.RAYDIUM.KEY,
+    })
+      .instruction()
+    const transaction = new Transaction().add(computeBudgetIns, matchOrderIns);
+    const tx = await provider.sendAndConfirm(transaction, [user2], { commitment: 'confirmed' });
+    console.log("User match order success at", tx);
+    const user2TokenYBalanceAfter = Number((await provider.connection.getTokenAccountBalance(user2TokenYAccount)).value.amount);
+    const user2TokenXBalanceAfter = Number((await provider.connection.getTokenAccountBalance(user2TokenXAccount)).value.amount);
+    assert.equal(user2TokenYBalanceBefore - user2TokenYBalanceAfter, yAmount.toNumber(), "User token Y balance is not set correctly");
+    assert.equal(user2TokenXBalanceAfter, Number(3.75 * 10 ** solanaDecimals), "User token X balance is not set correctly");
+  })
+
+  it('User match order with 150 raydium, for 1.25 remain SOL, and transfer only 50 raydium', async () => {
+    const yAmount = new BN(150 * 10 ** raydiumDecimals);
+    const [orderAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ORDER_AUTHORITY_SEED), order.publicKey.toBuffer()],
+      program.programId,
+    );
+    const user2TokenXAccount = await getAssociatedTokenAddress(solanaMint, user2.publicKey);
+    const user2TokenYAccount = await getAssociatedTokenAddress(raydiumMint, user2.publicKey);
+    const user2TokenXBalanceBefore = Number((await provider.connection.getTokenAccountBalance(user2TokenXAccount)).value.amount);
+    const user2TokenYBalanceBefore = Number((await provider.connection.getTokenAccountBalance(user2TokenYAccount)).value.amount);
+    const orderTokenXAccount = await getAssociatedTokenAddress(solanaMint, orderAuthority, true);
+    const orderTokenYAccount = await getAssociatedTokenAddress(raydiumMint, orderAuthority, true);
+    const [solanaAllowedTokenConfig] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), solanaMint.toBuffer()],
+      program.programId,
+    );
+    const [raydiumAllowedTokenConfig] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), raydiumMint.toBuffer()],
+      program.programId,
+    );
+
+    const computeBudgetIns = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1000000,
+    });
+    const matchOrderIns = await program.methods.userMatchOrder(yAmount).accounts({
+      user: user2.publicKey,
+      userTokenXAccount: user2TokenXAccount,
+      userTokenYAccount: user2TokenYAccount,
+      order: order.publicKey,
+      orderAuthority,
+      orderTokenXAccount,
+      orderTokenYAccount,
+      tokenX: solanaMint,
+      tokenY: raydiumMint,
+      tokenXConfig: solanaAllowedTokenConfig,
+      tokenYConfig: raydiumAllowedTokenConfig,
+      tokenXPythOracle: CONSTANTS.PYTH_ORACLE.SOL.KEY,
+      tokenYPythOracle: CONSTANTS.PYTH_ORACLE.RAYDIUM.KEY,
+    })
+      .instruction()
+    const transaction = new Transaction().add(computeBudgetIns, matchOrderIns);
+    const tx = await provider.sendAndConfirm(transaction, [user2], { commitment: 'confirmed' });
+    console.log("User match order success at", tx);
+    const user2TokenYBalanceAfter = Number((await provider.connection.getTokenAccountBalance(user2TokenYAccount)).value.amount);
+    const user2TokenXBalanceAfter = Number((await provider.connection.getTokenAccountBalance(user2TokenXAccount)).value.amount);
+    assert.equal(user2TokenYBalanceBefore - user2TokenYBalanceAfter, Number(50 * 10 ** raydiumDecimals), "User token Y balance is not set correctly");
+    assert.equal(user2TokenXBalanceAfter - user2TokenXBalanceBefore, Number(1.25 * 10 ** solanaDecimals), "User token X balance is not set correctly");
+  })
+
+  it('User match order failed to no remain', async () => {
+    const yAmount = new BN(150 * 10 ** raydiumDecimals);
     const [orderAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from(CONSTANTS.ORDER_AUTHORITY_SEED), order.publicKey.toBuffer()],
       program.programId,
@@ -175,31 +320,31 @@ describe("caliber-payment", () => {
       program.programId,
     );
 
+    const computeBudgetIns = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1000000,
+    });
+    const matchOrderIns = await program.methods.userMatchOrder(yAmount).accounts({
+      user: user2.publicKey,
+      userTokenXAccount: user2TokenXAccount,
+      userTokenYAccount: user2TokenYAccount,
+      order: order.publicKey,
+      orderAuthority,
+      orderTokenXAccount,
+      orderTokenYAccount,
+      tokenX: solanaMint,
+      tokenY: raydiumMint,
+      tokenXConfig: solanaAllowedTokenConfig,
+      tokenYConfig: raydiumAllowedTokenConfig,
+      tokenXPythOracle: CONSTANTS.PYTH_ORACLE.SOL.KEY,
+      tokenYPythOracle: CONSTANTS.PYTH_ORACLE.RAYDIUM.KEY,
+    })
+      .instruction()
     try {
-      const computeBudgetIns = ComputeBudgetProgram.setComputeUnitLimit({
-        units: 1000000,
-      });
-      const matchOrderIns = await program.methods.userMatchOrder(yAmount).accounts({
-        user: user2.publicKey,
-        userTokenXAccount: user2TokenXAccount,
-        userTokenYAccount: user2TokenYAccount,
-        order: order.publicKey,
-        orderAuthority,
-        orderTokenXAccount,
-        orderTokenYAccount,
-        tokenX: solanaMint,
-        tokenY: raydiumMint,
-        tokenXConfig: solanaAllowedTokenConfig,
-        tokenYConfig: raydiumAllowedTokenConfig,
-        tokenXPythOracle: CONSTANTS.PYTH_ORACLE.SOL.KEY,
-        tokenYPythOracle: CONSTANTS.PYTH_ORACLE.RAYDIUM.KEY,
-      })
-        .instruction()
       const transaction = new Transaction().add(computeBudgetIns, matchOrderIns);
-      const tx = await provider.sendAndConfirm(transaction, [user2], { commitment: 'confirmed' });
-      console.log("User match order success at", tx);
-    } catch (error) {
-      console.log(error);
+      await provider.sendAndConfirm(transaction, [user2], { commitment: 'confirmed' });
+      assert.fail("User match order should fail");
+    } catch (e) {
+      assert.ok(e.transactionLogs.some(log => log.includes('NoTokenXAmount')))
     }
   })
 });
