@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*;
 
+use crate::constants::BPS_BASE;
+use crate::errors::PaymentError;
+
 #[account]
 pub struct Config {
     pub admin: Pubkey,
@@ -19,9 +22,12 @@ impl Config {
         fee_recipient: Pubkey,
         protocol_fee_rate: u16,
     ) -> Result<()> {
+        require!(
+            protocol_fee_rate <= BPS_BASE,
+            PaymentError::InvalidProtocolFeeRate
+        );
         self.admin = admin;
         self.fee_recipient = fee_recipient;
-        // TODO: validate protocol fee rate
         self.protocol_fee_rate = protocol_fee_rate;
         Ok(())
     }
