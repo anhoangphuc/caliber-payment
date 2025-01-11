@@ -1,8 +1,7 @@
 use anchor_lang::prelude::*;
 
-use crate::constants::BPS_BASE;
 use crate::errors::PaymentError;
-
+use crate::math::common::BPS_BASE;
 #[account]
 pub struct Config {
     pub admin: Pubkey,

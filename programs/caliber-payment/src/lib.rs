@@ -38,4 +38,11 @@ pub mod caliber_payment {
     ) -> Result<()> {
         admin::admin_update_oracle::handler(ctx, &feed_id_hex)
     }
+
+    pub fn user_create_order(
+        ctx: Context<UserCreateOrder>,
+        params: CreateOrderParams,
+    ) -> Result<()> {
+        users::user_create_order::handler(ctx, params)
+    }
 }

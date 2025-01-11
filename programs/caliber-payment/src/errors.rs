@@ -9,4 +9,10 @@ pub enum PaymentError {
     InvalidAdmin,
     #[msg("Math overflow")]
     MathOverflow,
+    #[msg("Invalid token pair")]
+    InvalidTokenPair,
+    #[msg("Unsupported token")]
+    UnsupportedToken,
+    #[msg("Invalid price range")]
+    InvalidPriceRange,
 }
