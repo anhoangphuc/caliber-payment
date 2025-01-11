@@ -1,31 +1,67 @@
 use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token::{transfer, Mint, Token, TokenAccount, Transfer};
 
 use crate::errors::*;
 use crate::states::*;
 
 #[derive(Accounts)]
-#[instruction(params: CreateOrderParams)]
 pub struct UserCreateOrder<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     #[account(init, payer = user, space = Order::SPACE)]
     pub order: Box<Account<'info, Order>>,
+    /// CHECK: An authority PDA for the order
     #[account(
-        seeds = [AllowedTokenConfig::SEEDS.as_bytes(), params.token_x_mint.as_ref()],
+        init,
+        payer = user,
+        space = OrderAuthority::SPACE,
+        seeds = [OrderAuthority::SEEDS.as_bytes(), order.key().as_ref()],
         bump,
-        constraint = token_x_config.token == params.token_x_mint @ PaymentError::UnsupportedToken,
+    )]
+    pub order_authority: AccountInfo<'info>,
+    #[account()]
+    pub token_x: Box<Account<'info, Mint>>,
+    #[account()]
+    pub token_y: Box<Account<'info, Mint>>,
+    #[account(
+        mut,
+        associated_token::mint = token_x,
+        associated_token::authority = user,
+    )]
+    pub user_token_x_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        init,
+        payer = user,
+        associated_token::mint = token_x,
+        associated_token::authority = order_authority,
+    )]
+    pub order_token_x_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        init,
+        payer = user,
+        associated_token::mint = token_y,
+        associated_token::authority = order_authority,
+    )]
+    pub order_token_y_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        seeds = [AllowedTokenConfig::SEEDS.as_bytes(), token_x.key().as_ref()],
+        bump,
+        constraint = token_x_config.token == token_x.key() @ PaymentError::UnsupportedToken,
     )]
     pub token_x_config: Box<Account<'info, AllowedTokenConfig>>,
     #[account(
-        seeds = [AllowedTokenConfig::SEEDS.as_bytes(), params.token_y_mint.as_ref()],
+        seeds = [AllowedTokenConfig::SEEDS.as_bytes(), token_y.key().as_ref()],
         bump,
-        constraint = token_y_config.token == params.token_y_mint @ PaymentError::UnsupportedToken,
+        constraint = token_y_config.token == token_y.key() @ PaymentError::UnsupportedToken,
     )]
     pub token_y_config: Box<Account<'info, AllowedTokenConfig>>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize)]
+#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
 pub struct CreateOrderParams {
     pub token_x_mint: Pubkey,
     pub token_y_mint: Pubkey,
@@ -34,11 +70,22 @@ pub struct CreateOrderParams {
     pub min_y_price: u64,
     pub max_y_price: u64,
     pub validity_duration: u64,
+    pub amount: u64,
 }
 
 pub fn handler(ctx: Context<UserCreateOrder>, params: CreateOrderParams) -> Result<()> {
     let order = &mut ctx.accounts.order;
     order.initialize(ctx.accounts.user.key(), &params)?;
+    let transfer_ctx = CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.user_token_x_account.to_account_info(),
+            to: ctx.accounts.order_token_x_account.to_account_info(),
+            authority: ctx.accounts.user.to_account_info(),
+        },
+    );
+
+    transfer(transfer_ctx, params.amount)?;
 
     Ok(())
 }

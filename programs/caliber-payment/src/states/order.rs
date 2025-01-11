@@ -33,14 +33,6 @@ impl Order {
             param.min_y_price <= param.max_y_price,
             PaymentError::InvalidPriceRange
         );
-        require!(
-            u64::MAX / PRICE_SCALER >= param.max_x_price,
-            PaymentError::InvalidPriceRange
-        );
-        require!(
-            u64::MAX / PRICE_SCALER >= param.max_y_price,
-            PaymentError::InvalidPriceRange
-        );
 
         let now = Clock::get()?.unix_timestamp as u64;
         self.user = user;

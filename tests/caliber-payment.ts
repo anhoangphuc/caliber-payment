@@ -55,8 +55,6 @@ describe("caliber-payment", () => {
       [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), solanaMint.toBuffer()],
       program.programId,
     );
-    const priceFeedBuffer = Buffer.from(CONSTANTS.PYTH_ORACLE.SOL.ID.slice(2), 'hex');
-    console.log(priceFeedBuffer);
 
 
     const tx = await program.methods.adminAddAllowedToken(CONSTANTS.PYTH_ORACLE.SOL.ID).accounts({
