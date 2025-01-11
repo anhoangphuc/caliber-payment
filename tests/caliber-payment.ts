@@ -55,11 +55,14 @@ describe("caliber-payment", () => {
       [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), solanaMint.toBuffer()],
       program.programId,
     );
-    const pythOracle = anchor.web3.Keypair.generate();
-    const tx = await program.methods.adminAddAllowedToken().accounts({
+    const priceFeedBuffer = Buffer.from(CONSTANTS.PYTH_ORACLE.SOL.ID.slice(2), 'hex');
+    console.log(priceFeedBuffer);
+
+
+    const tx = await program.methods.adminAddAllowedToken(CONSTANTS.PYTH_ORACLE.SOL.ID).accounts({
       admin: admin.publicKey,
       config: config,
-      pythOracle: pythOracle.publicKey,
+      pythOracle: CONSTANTS.PYTH_ORACLE.SOL.KEY,
       allowedTokenConfig,
       token: solanaMint,
     }).rpc({ commitment: 'confirmed' });
@@ -67,7 +70,7 @@ describe("caliber-payment", () => {
 
     const allowedTokenConfigAccount = await program.account.allowedTokenConfig.fetch(allowedTokenConfig);
     assert.equal(allowedTokenConfigAccount.token.toBase58(), solanaMint.toBase58(), "Token is not set correctly");
-    assert.equal(allowedTokenConfigAccount.pythOracle.toBase58(), pythOracle.publicKey.toBase58(), "Pyth oracle is not set correctly");
+    assert.equal(allowedTokenConfigAccount.pythOracle.toBase58(), CONSTANTS.PYTH_ORACLE.SOL.KEY, "Pyth oracle is not set correctly");
     assert.equal(allowedTokenConfigAccount.enabled, true, "Enabled status is not set correctly");
   });
 
@@ -90,29 +93,6 @@ describe("caliber-payment", () => {
 
     const allowedTokenConfigAccount = await program.account.allowedTokenConfig.fetch(allowedTokenConfig);
     assert.equal(allowedTokenConfigAccount.enabled, false, "Enabled status is not set correctly");
-  });
-
-  it("Admin update allowed token oracle", async () => {
-    const [config] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from(CONSTANTS.CONFIG_SEED)],
-      program.programId,
-    );
-    const [allowedTokenConfig] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), solanaMint.toBuffer()],
-      program.programId,
-    );
-
-    const pythOracle = anchor.web3.Keypair.generate();
-    const tx = await program.methods.adminUpdateAllowedTokenOracle().accounts({
-      admin: admin.publicKey,
-      config: config,
-      allowedTokenConfig,
-      pythOracle: pythOracle.publicKey,
-    }).rpc({ commitment: 'confirmed' });
-    console.log("Admin update allowed token oracle success at", tx);
-
-    const allowedTokenConfigAccount = await program.account.allowedTokenConfig.fetch(allowedTokenConfig);
-    assert.equal(allowedTokenConfigAccount.pythOracle.toBase58(), pythOracle.publicKey.toBase58(), "Pyth oracle is not set correctly");
   });
 });
 
