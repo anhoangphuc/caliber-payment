@@ -6,6 +6,15 @@ A Solana program for handling decentralized payments with price-based order matc
 
 Caliber Payment is a Solana program that enables users to create, match, and settle payment orders between different tokens using Pyth price feeds. The program supports protocol fees and administrator controls for token whitelisting. 
 
+## Features
+
+- Create payment orders with specified token pairs
+- Match orders based on Pyth oracle price feeds
+- Protocol fee collection system
+- Token whitelisting with admin controls
+- Partial and full order matching
+- Order expiration handling
+
 ## Order Matching Mechanism
 
 ### Partial Order Matching
@@ -43,16 +52,35 @@ This partial matching system enables:
 - Flexibility for users with different amount requirements
 
 
-## Features
+### Protocol Fee Mechanism
 
-- Create payment orders with specified token pairs
-- Match orders based on Pyth oracle price feeds
-- Protocol fee collection system
-- Token whitelisting with admin controls
-- Partial and full order matching
-- Order expiration handling
+The protocol implements a fee system that:
+- Charges a percentage fee on the token Y (receiving token) amount in each match
+- Fee is collected at the time of order matching
+- Fees are sent to a designated fee recipient account
 
-## Program Architecture
+The fee calculation and collection process:
+1. Fee percentage is configured at the protocol level
+2. When an order is matched:
+   - The Y token amount for the match is determined
+   - Protocol fee is calculated as: y_amount * fee_rate
+   - Fee amount is transferred from the matching user to fee recipient
+   - The remaining amount goes to the order
+
+Example:
+- Protocol fee rate: 1%
+- Order match amount: 100 USDC
+- Fee charged: 1 USDC to fee recipient
+- Net amount to order: 101 USDC
+
+Benefits:
+- Sustainable protocol revenue model
+- Transparent fee structure
+- Automated fee collection
+- Configurable fee rates by admin
+
+The collected fees can be claimed by the protocol admin using the `admin_claim_fee` instruction.
+
 
 ### Core Components
 
