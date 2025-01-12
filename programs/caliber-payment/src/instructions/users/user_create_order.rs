@@ -4,6 +4,7 @@ use anchor_spl::token::{transfer, Mint, Token, TokenAccount, Transfer};
 
 use crate::errors::*;
 use crate::states::*;
+use crate::events::*;
 
 #[derive(Accounts)]
 pub struct UserCreateOrder<'info> {
@@ -88,6 +89,15 @@ pub fn handler(ctx: Context<UserCreateOrder>, params: CreateOrderParams) -> Resu
     );
 
     transfer(transfer_ctx, params.amount)?;
+
+    emit!(CreateOrderEvent {
+        order: order.key(),
+        user: ctx.accounts.user.key(),
+        token_x: token_x_mint,
+        token_y: token_y_mint,
+        amount_x: params.amount,
+        created_at: Clock::get()?.unix_timestamp as u64,
+    });
 
     Ok(())
 }
