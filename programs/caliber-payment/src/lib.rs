@@ -2,10 +2,10 @@ use anchor_lang::prelude::*;
 
 mod constants;
 mod errors;
+mod events;
 mod instructions;
 mod math;
 mod states;
-mod events;
 
 use instructions::*;
 

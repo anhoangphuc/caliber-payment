@@ -5,6 +5,7 @@ use anchor_spl::token::{
 };
 
 use crate::errors::PaymentError;
+use crate::events::*;
 use crate::states::*;
 
 #[derive(Accounts)]
@@ -127,5 +128,11 @@ pub fn handler(ctx: Context<UserFinishOrder>) -> Result<()> {
 
     msg!("Finish closing");
 
+    emit!(FinishOrderEvent {
+        order: order.key(),
+        x_amount: x_amount,
+        y_amount: y_amount,
+        finished_at: Clock::get()?.unix_timestamp as u64,
+    });
     Ok(())
 }

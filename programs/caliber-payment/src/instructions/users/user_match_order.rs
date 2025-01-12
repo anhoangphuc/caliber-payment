@@ -4,6 +4,7 @@ use anchor_spl::token::{transfer, Mint, Token, TokenAccount, Transfer};
 use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 
 use crate::errors::PaymentError;
+use crate::events::*;
 use crate::math::{Decimal, TryDiv, TryMul};
 use crate::states::*;
 
@@ -137,6 +138,7 @@ pub fn handler(ctx: Context<UserMatchOrder>, y_amount: u64) -> Result<()> {
     ]];
 
     let mut y_transferred = 0;
+    let mut x_transferred = 0;
     if x_amount_calculated <= x_amount {
         msg!("Partial match");
         let transfer_x_ctx = CpiContext::new_with_signer(
@@ -149,6 +151,7 @@ pub fn handler(ctx: Context<UserMatchOrder>, y_amount: u64) -> Result<()> {
             order_authority_seeds,
         );
         transfer(transfer_x_ctx, x_amount_calculated)?;
+        x_transferred = x_amount_calculated;
 
         let transfer_y_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
@@ -173,6 +176,7 @@ pub fn handler(ctx: Context<UserMatchOrder>, y_amount: u64) -> Result<()> {
             order_authority_seeds,
         );
         transfer(transfer_x_ctx, x_amount)?;
+        x_transferred = x_amount;
 
         let transfer_y_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
@@ -198,6 +202,15 @@ pub fn handler(ctx: Context<UserMatchOrder>, y_amount: u64) -> Result<()> {
         },
     );
     transfer(transfer_fee_ctx, protocol_fee)?;
+
+    emit!(MatchOrderEvent {
+        order: order.key(),
+        match_user: ctx.accounts.user.key(),
+        amount_x: x_transferred,
+        amount_y: y_transferred,
+        remain_x: x_amount - x_transferred,
+        matched_at: Clock::get()?.unix_timestamp as u64,
+    });
     Ok(())
 }
 
@@ -231,46 +244,43 @@ mod tests {
     fn test_get_y_amount_from_x_amount() {
         // Test case 1: Simple conversion with same decimals
         let result = get_y_amount_from_x_amount(
-            1000000000, // 1 SOL
+            1000000000,           // 1 SOL
             Decimal::from(20u64), // SOL price $20
-            9, // SOL decimals
-            Decimal::from(2u64), // Token Y price $2
-            9, // Token Y decimals
-        ).unwrap();
+            9,                    // SOL decimals
+            Decimal::from(2u64),  // Token Y price $2
+            9,                    // Token Y decimals
+        )
+        .unwrap();
         assert_eq!(result, 10000000000); // Should get 10 Token Y
 
         // Test case 2: Different decimals
         let result = get_y_amount_from_x_amount(
-            1000000000, // 1 SOL
+            1000000000,           // 1 SOL
             Decimal::from(20u64), // SOL price $20
-            9, // SOL decimals 
-            Decimal::from(4u64), // Token Y price $4
-            6, // Token Y decimals
-        ).unwrap();
+            9,                    // SOL decimals
+            Decimal::from(4u64),  // Token Y price $4
+            6,                    // Token Y decimals
+        )
+        .unwrap();
         assert_eq!(result, 5000000); // Should get 5 Token Y
 
         // Test case 3: Large numbers
         let result = get_y_amount_from_x_amount(
-            10000000000, // 10 SOL
+            10000000000,           // 10 SOL
             Decimal::from(100u64), // SOL price $100
-            9, // SOL decimals
-            Decimal::from(1u64), // Token Y price $1
-            6, // Token Y decimals
-        ).unwrap();
+            9,                     // SOL decimals
+            Decimal::from(1u64),   // Token Y price $1
+            6,                     // Token Y decimals
+        )
+        .unwrap();
         assert_eq!(result, 1000000000); // Should get 1000 Token Y
     }
 
     #[test]
     fn test_get_y_amount_from_x_amount_zero_price() {
         // Should fail when token Y price is 0
-        let result = get_y_amount_from_x_amount(
-            1000000000,
-            Decimal::from(20u64),
-            9,
-            Decimal::from(0u64),
-            9,
-        );
+        let result =
+            get_y_amount_from_x_amount(1000000000, Decimal::from(20u64), 9, Decimal::from(0u64), 9);
         assert!(result.is_err());
     }
 }
-

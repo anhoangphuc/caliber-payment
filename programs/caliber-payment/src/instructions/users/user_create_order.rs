@@ -3,8 +3,8 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{transfer, Mint, Token, TokenAccount, Transfer};
 
 use crate::errors::*;
-use crate::states::*;
 use crate::events::*;
+use crate::states::*;
 
 #[derive(Accounts)]
 pub struct UserCreateOrder<'info> {
