@@ -61,6 +61,12 @@ describe("caliber-payment", () => {
       [Buffer.from(CONSTANTS.CONFIG_SEED)],
       program.programId,
     );
+    const [feeRecipient] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.FEE_RECIPIENT_SEED)],
+      program.programId,
+    );
+    const feeRecipientSolanaTokenAccount = await getAssociatedTokenAddress(solanaMint, feeRecipient, true);
+    const feeRecipientRaydiumTokenAccount = await getAssociatedTokenAddress(raydiumMint, feeRecipient, true);
     const [solanaAllowedTokenConfig] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), solanaMint.toBuffer()],
       program.programId,
@@ -73,6 +79,8 @@ describe("caliber-payment", () => {
     const tx1 = await program.methods.adminAddAllowedToken(CONSTANTS.PYTH_ORACLE.SOL.ID).accounts({
       admin: admin.publicKey,
       config: config,
+      feeRecipient,
+      feeRecipientTokenAccount: feeRecipientSolanaTokenAccount,
       pythOracle: CONSTANTS.PYTH_ORACLE.SOL.KEY,
       allowedTokenConfig: solanaAllowedTokenConfig,
       token: solanaMint,
@@ -82,6 +90,8 @@ describe("caliber-payment", () => {
     const tx2 = await program.methods.adminAddAllowedToken(CONSTANTS.PYTH_ORACLE.RAYDIUM.ID).accounts({
       admin: admin.publicKey,
       config: config,
+      feeRecipient,
+      feeRecipientTokenAccount: feeRecipientRaydiumTokenAccount,
       pythOracle: CONSTANTS.PYTH_ORACLE.RAYDIUM.KEY,
       allowedTokenConfig: raydiumAllowedTokenConfig,
       token: raydiumMint,
