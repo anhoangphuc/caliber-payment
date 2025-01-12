@@ -347,6 +347,41 @@ describe("caliber-payment", () => {
       assert.ok(e.transactionLogs.some(log => log.includes('NoTokenXAmount')))
     }
   })
+
+  it('Owner user finish order and withdraw remaining token', async () => {
+    const [orderAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ORDER_AUTHORITY_SEED), order.publicKey.toBuffer()],
+      program.programId,
+    );
+    const userTokenXAccount = await getAssociatedTokenAddress(solanaMint, user.publicKey);
+    const userTokenYAccount = await getAssociatedTokenAddress(raydiumMint, user.publicKey);
+    const orderTokenXAccount = await getAssociatedTokenAddress(solanaMint, orderAuthority, true);
+    const orderTokenYAccount = await getAssociatedTokenAddress(raydiumMint, orderAuthority, true);
+    const userTokenXBalanceBefore = Number((await provider.connection.getTokenAccountBalance(userTokenXAccount)).value.amount);
+
+    const computeBudgetIns = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1000000,
+    });
+    const finishOrderIns = await program.methods.userFinishOrder().accounts({
+      user: user.publicKey,
+      userTokenXAccount: userTokenXAccount,
+      userTokenYAccount: userTokenYAccount,
+      order: order.publicKey,
+      orderAuthority,
+      orderTokenXAccount,
+      orderTokenYAccount,
+      tokenX: solanaMint,
+      tokenY: raydiumMint,
+    })
+      .instruction()
+    const transaction = new Transaction().add(computeBudgetIns, finishOrderIns);
+    const tx = await provider.sendAndConfirm(transaction, [user], { commitment: 'confirmed' });
+    console.log("User finish order success at", tx);
+    const userTokenXBalanceAfter = Number((await provider.connection.getTokenAccountBalance(userTokenXAccount)).value.amount);
+    const userTokenYBalanceAfter = Number((await provider.connection.getTokenAccountBalance(userTokenYAccount)).value.amount);
+    assert.equal(userTokenXBalanceAfter - userTokenXBalanceBefore, Number(0 * 10 ** solanaDecimals), "User token X balance is not set correctly");
+    assert.equal(userTokenYBalanceAfter, Number(200 * 10 ** raydiumDecimals), "User token Y balance is not set correctly");
+  })
 });
 
 

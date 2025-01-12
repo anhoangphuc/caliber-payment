@@ -23,4 +23,6 @@ pub enum PaymentError {
     OutOfPriceRange,
     #[msg("No token x amount")]
     NoTokenXAmount,
+    #[msg("Invalid order authority")]
+    InvalidOrderAuthority,
 }
