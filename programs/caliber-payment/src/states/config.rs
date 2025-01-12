@@ -30,4 +30,8 @@ impl Config {
         self.protocol_fee_rate = protocol_fee_rate;
         Ok(())
     }
+
+    pub fn get_protocol_fee(&self, amount: u64) -> u64 {
+        amount * (self.protocol_fee_rate as u64) / (BPS_BASE as u64)
+    }
 }
