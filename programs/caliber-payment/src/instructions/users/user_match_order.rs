@@ -221,3 +221,56 @@ fn get_y_amount_from_x_amount(
     msg!("y_amount: {}", y_amount);
     Ok(y_amount)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::math::Decimal;
+
+    #[test]
+    fn test_get_y_amount_from_x_amount() {
+        // Test case 1: Simple conversion with same decimals
+        let result = get_y_amount_from_x_amount(
+            1000000000, // 1 SOL
+            Decimal::from(20u64), // SOL price $20
+            9, // SOL decimals
+            Decimal::from(2u64), // Token Y price $2
+            9, // Token Y decimals
+        ).unwrap();
+        assert_eq!(result, 10000000000); // Should get 10 Token Y
+
+        // Test case 2: Different decimals
+        let result = get_y_amount_from_x_amount(
+            1000000000, // 1 SOL
+            Decimal::from(20u64), // SOL price $20
+            9, // SOL decimals 
+            Decimal::from(4u64), // Token Y price $4
+            6, // Token Y decimals
+        ).unwrap();
+        assert_eq!(result, 5000000); // Should get 5 Token Y
+
+        // Test case 3: Large numbers
+        let result = get_y_amount_from_x_amount(
+            10000000000, // 10 SOL
+            Decimal::from(100u64), // SOL price $100
+            9, // SOL decimals
+            Decimal::from(1u64), // Token Y price $1
+            6, // Token Y decimals
+        ).unwrap();
+        assert_eq!(result, 1000000000); // Should get 1000 Token Y
+    }
+
+    #[test]
+    fn test_get_y_amount_from_x_amount_zero_price() {
+        // Should fail when token Y price is 0
+        let result = get_y_amount_from_x_amount(
+            1000000000,
+            Decimal::from(20u64),
+            9,
+            Decimal::from(0u64),
+            9,
+        );
+        assert!(result.is_err());
+    }
+}
+
