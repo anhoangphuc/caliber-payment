@@ -53,4 +53,8 @@ pub mod caliber_payment {
     pub fn user_finish_order(ctx: Context<UserFinishOrder>) -> Result<()> {
         users::user_finish_order::handler(ctx)
     }
+
+    pub fn admin_claim_fee(ctx: Context<AdminClaimFee>) -> Result<()> {
+        admin::admin_claim_fee::handler(ctx)
+    }
 }

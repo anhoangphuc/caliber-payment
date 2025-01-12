@@ -439,6 +439,49 @@ describe("caliber-payment", () => {
     assert.equal(userTokenXBalanceAfter - userTokenXBalanceBefore, Number(0 * 10 ** solanaDecimals), "User token X balance is not set correctly");
     assert.equal(userTokenYBalanceAfter, Number(200 * 10 ** raydiumDecimals), "User token Y balance is not set correctly");
   })
+
+  it('Admin claim fee', async () => {
+    const [feeRecipient] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.FEE_RECIPIENT_SEED)],
+      program.programId,
+    );
+    const [config] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.CONFIG_SEED)],
+      program.programId,
+    );
+    const feeRecipientRaydiumTokenAccount = await getAssociatedTokenAddress(raydiumMint, feeRecipient, true);
+    const adminTokenAccount = await getAssociatedTokenAddress(raydiumMint, admin.publicKey);
+    const [orderAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ORDER_AUTHORITY_SEED), order.publicKey.toBuffer()],
+      program.programId,
+    );
+    const feeRecipientRaydiumBalanceBefore = Number((await provider.connection.getTokenAccountBalance(feeRecipientRaydiumTokenAccount)).value.amount);
+
+    const computeBudgetIns = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1000000,
+    });
+
+    const claimFeeIns = await program.methods.adminClaimFee().accounts({
+      config,
+      admin: admin.publicKey,
+      feeRecipient,
+      feeRecipientTokenAccount: feeRecipientRaydiumTokenAccount,
+      adminTokenAccount: adminTokenAccount,
+      allowedToken: raydiumMint,
+    })
+      .instruction()
+
+    const transaction = new Transaction().add(computeBudgetIns, claimFeeIns);
+    try {
+      const tx = await provider.sendAndConfirm(transaction, [], { commitment: 'confirmed' });
+      console.log("Admin claim fee success at", tx);
+    } catch (e) {
+      console.log(e);
+    }
+    const feeRecipientRaydiumBalanceAfter = Number((await provider.connection.getTokenAccountBalance(feeRecipientRaydiumTokenAccount)).value.amount);
+    // Total 200 Raydium => 3% protocol fee => 6 Raydium
+    assert.equal(feeRecipientRaydiumBalanceAfter - feeRecipientRaydiumBalanceBefore, -Number(6 * 10 ** raydiumDecimals), "Fee recipient token Y balance is not set correctly");
+  })
 });
 
 

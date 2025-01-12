@@ -135,7 +135,7 @@ pub fn handler(ctx: Context<UserMatchOrder>, y_amount: u64) -> Result<()> {
         order_key.as_ref(),
         &[ctx.bumps.order_authority],
     ]];
-    
+
     let mut y_transferred = 0;
     if x_amount_calculated <= x_amount {
         msg!("Partial match");
