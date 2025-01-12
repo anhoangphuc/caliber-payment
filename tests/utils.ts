@@ -30,13 +30,19 @@ export async function delay(ms: number) {
 }
 
 export const CONSTANTS = {
+    PRICE_SCALER: 1_000_000_000,
     CONFIG_SEED: "CONFIG",
     FEE_RECIPIENT_SEED: "FEE_RECIPIENT",
     ALLOWED_TOKEN_CONFIG_SEED: "ALLOWED_TOKEN",
+    ORDER_AUTHORITY_SEED: "ORDER_AUTHORITY",
     PYTH_ORACLE: {
         SOL: {
             ID: "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
             KEY: "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE",
+        },
+        RAYDIUM: {
+            ID: "0x91568baa8beb53db23eb3fb7f22c6e8bd303d103919e19733f2bb642d3e7987a",
+            KEY: "Hhipna3EoWR7u8pDruUg8RxhP5F6XLh6SEHMVDmZhWi8",
         }
     }
 }

@@ -38,4 +38,19 @@ pub mod caliber_payment {
     ) -> Result<()> {
         admin::admin_update_oracle::handler(ctx, &feed_id_hex)
     }
+
+    pub fn user_create_order(
+        ctx: Context<UserCreateOrder>,
+        params: CreateOrderParams,
+    ) -> Result<()> {
+        users::user_create_order::handler(ctx, params)
+    }
+
+    pub fn user_match_order(ctx: Context<UserMatchOrder>, y_amount: u64) -> Result<()> {
+        users::user_match_order::handler(ctx, y_amount)
+    }
+
+    pub fn user_finish_order(ctx: Context<UserFinishOrder>) -> Result<()> {
+        users::user_finish_order::handler(ctx)
+    }
 }
