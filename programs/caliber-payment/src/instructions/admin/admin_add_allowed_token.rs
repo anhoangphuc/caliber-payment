@@ -1,7 +1,8 @@
 use crate::errors::PaymentError;
 use crate::states::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token::Mint;
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token::{Mint, Token, TokenAccount};
 use pyth_solana_receiver_sdk::price_update::{get_feed_id_from_hex, PriceUpdateV2};
 
 #[derive(Accounts)]
@@ -17,7 +18,18 @@ pub struct AdminAddAllowedToken<'info> {
         bump,
     )]
     pub config: Account<'info, Config>,
-    /// CHECK: Pyth oracle for the token
+    /// CHECK: Fee recipient
+    #[account(
+        address = config.fee_recipient @ PaymentError::InvalidFeeRecipient,
+    )]
+    pub fee_recipient: AccountInfo<'info>,
+    #[account(
+        init_if_needed,
+        payer = admin,
+        associated_token::mint = token,
+        associated_token::authority = fee_recipient,
+    )]
+    pub fee_recipient_token_account: Box<Account<'info, TokenAccount>>,
     #[account()]
     pub pyth_oracle: Box<Account<'info, PriceUpdateV2>>,
     #[account(
@@ -29,6 +41,8 @@ pub struct AdminAddAllowedToken<'info> {
     )]
     pub allowed_token_config: Box<Account<'info, AllowedTokenConfig>>,
     pub token: Box<Account<'info, Mint>>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
 

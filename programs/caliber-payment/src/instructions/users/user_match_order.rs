@@ -19,6 +19,22 @@ pub struct UserMatchOrder<'info> {
     )]
     pub user_token_x_account: Box<Account<'info, TokenAccount>>,
     #[account(
+        seeds = [Config::SEEDS.as_bytes()],
+        bump,
+    )]
+    pub config: Box<Account<'info, Config>>,
+    /// CHECK: Fee recipient
+    #[account(
+        address = config.fee_recipient @ PaymentError::InvalidFeeRecipient,
+    )]
+    pub fee_recipient: AccountInfo<'info>,
+    #[account(
+        mut,
+        associated_token::mint = token_y,
+        associated_token::authority = fee_recipient,
+    )]
+    pub fee_recipient_token_y_account: Box<Account<'info, TokenAccount>>,
+    #[account(
         mut,
         associated_token::mint = token_y,
         associated_token::authority = user,
@@ -119,6 +135,8 @@ pub fn handler(ctx: Context<UserMatchOrder>, y_amount: u64) -> Result<()> {
         order_key.as_ref(),
         &[ctx.bumps.order_authority],
     ]];
+
+    let mut y_transferred = 0;
     if x_amount_calculated <= x_amount {
         msg!("Partial match");
         let transfer_x_ctx = CpiContext::new_with_signer(
@@ -141,6 +159,7 @@ pub fn handler(ctx: Context<UserMatchOrder>, y_amount: u64) -> Result<()> {
             },
         );
         transfer(transfer_y_ctx, y_amount)?;
+        y_transferred = y_amount;
     } else if y_amount_calculated <= y_amount {
         // Full match, get partial from user, and full from order
         msg!("Full match");
@@ -164,9 +183,21 @@ pub fn handler(ctx: Context<UserMatchOrder>, y_amount: u64) -> Result<()> {
             },
         );
         transfer(transfer_y_ctx, y_amount_calculated)?;
+        y_transferred = y_amount_calculated;
     } else {
         msg!("No match, something went wrong");
     }
+
+    let protocol_fee = ctx.accounts.config.get_protocol_fee(y_transferred);
+    let transfer_fee_ctx = CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.user_token_y_account.to_account_info(),
+            to: ctx.accounts.fee_recipient_token_y_account.to_account_info(),
+            authority: ctx.accounts.user.to_account_info(),
+        },
+    );
+    transfer(transfer_fee_ctx, protocol_fee)?;
     Ok(())
 }
 

@@ -61,6 +61,12 @@ describe("caliber-payment", () => {
       [Buffer.from(CONSTANTS.CONFIG_SEED)],
       program.programId,
     );
+    const [feeRecipient] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.FEE_RECIPIENT_SEED)],
+      program.programId,
+    );
+    const feeRecipientSolanaTokenAccount = await getAssociatedTokenAddress(solanaMint, feeRecipient, true);
+    const feeRecipientRaydiumTokenAccount = await getAssociatedTokenAddress(raydiumMint, feeRecipient, true);
     const [solanaAllowedTokenConfig] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from(CONSTANTS.ALLOWED_TOKEN_CONFIG_SEED), solanaMint.toBuffer()],
       program.programId,
@@ -73,6 +79,8 @@ describe("caliber-payment", () => {
     const tx1 = await program.methods.adminAddAllowedToken(CONSTANTS.PYTH_ORACLE.SOL.ID).accounts({
       admin: admin.publicKey,
       config: config,
+      feeRecipient,
+      feeRecipientTokenAccount: feeRecipientSolanaTokenAccount,
       pythOracle: CONSTANTS.PYTH_ORACLE.SOL.KEY,
       allowedTokenConfig: solanaAllowedTokenConfig,
       token: solanaMint,
@@ -82,6 +90,8 @@ describe("caliber-payment", () => {
     const tx2 = await program.methods.adminAddAllowedToken(CONSTANTS.PYTH_ORACLE.RAYDIUM.ID).accounts({
       admin: admin.publicKey,
       config: config,
+      feeRecipient,
+      feeRecipientTokenAccount: feeRecipientRaydiumTokenAccount,
       pythOracle: CONSTANTS.PYTH_ORACLE.RAYDIUM.KEY,
       allowedTokenConfig: raydiumAllowedTokenConfig,
       token: raydiumMint,
@@ -206,6 +216,16 @@ describe("caliber-payment", () => {
 
   it('User match order with 150 raydium for 3.75 SOL', async () => {
     const yAmount = new BN(150 * 10 ** raydiumDecimals);
+    const [config] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.CONFIG_SEED)],
+      program.programId,
+    );
+    const [feeRecipient] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.FEE_RECIPIENT_SEED)],
+      program.programId,
+    );
+    const feeRecipientRaydiumTokenAccount = await getAssociatedTokenAddress(raydiumMint, feeRecipient, true);
+    const feeRecipientRaydiumBalanceBefore = Number((await provider.connection.getTokenAccountBalance(feeRecipientRaydiumTokenAccount)).value.amount);
     const [orderAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from(CONSTANTS.ORDER_AUTHORITY_SEED), order.publicKey.toBuffer()],
       program.programId,
@@ -228,6 +248,9 @@ describe("caliber-payment", () => {
       units: 1000000,
     });
     const matchOrderIns = await program.methods.userMatchOrder(yAmount).accounts({
+      config,
+      feeRecipient,
+      feeRecipientTokenYAccount: feeRecipientRaydiumTokenAccount,
       user: user2.publicKey,
       userTokenXAccount: user2TokenXAccount,
       userTokenYAccount: user2TokenYAccount,
@@ -246,13 +269,27 @@ describe("caliber-payment", () => {
     const transaction = new Transaction().add(computeBudgetIns, matchOrderIns);
     const tx = await provider.sendAndConfirm(transaction, [user2], { commitment: 'confirmed' });
     console.log("User match order success at", tx);
+    // 3% protocol fee
+    const protocolFee = yAmount.mul(new BN(3)).div(new BN(100));
     const user2TokenYBalanceAfter = Number((await provider.connection.getTokenAccountBalance(user2TokenYAccount)).value.amount);
     const user2TokenXBalanceAfter = Number((await provider.connection.getTokenAccountBalance(user2TokenXAccount)).value.amount);
-    assert.equal(user2TokenYBalanceBefore - user2TokenYBalanceAfter, yAmount.toNumber(), "User token Y balance is not set correctly");
+    const feeRecipientRaydiumBalanceAfter = Number((await provider.connection.getTokenAccountBalance(feeRecipientRaydiumTokenAccount)).value.amount);
+    assert.equal(feeRecipientRaydiumBalanceAfter - feeRecipientRaydiumBalanceBefore, protocolFee.toNumber(), "Protocol fee is not set correctly");
     assert.equal(user2TokenXBalanceAfter, Number(3.75 * 10 ** solanaDecimals), "User token X balance is not set correctly");
+    assert.equal(user2TokenYBalanceBefore - user2TokenYBalanceAfter, yAmount.add(protocolFee).toNumber(), "User token Y balance is not set correctly");
   })
 
   it('User match order with 150 raydium, for 1.25 remain SOL, and transfer only 50 raydium', async () => {
+    const [config] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.CONFIG_SEED)],
+      program.programId,
+    );
+    const [feeRecipient] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.FEE_RECIPIENT_SEED)],
+      program.programId,
+    );
+    const feeRecipientRaydiumTokenAccount = await getAssociatedTokenAddress(raydiumMint, feeRecipient, true);
+    const feeRecipientRaydiumBalanceBefore = Number((await provider.connection.getTokenAccountBalance(feeRecipientRaydiumTokenAccount)).value.amount);
     const yAmount = new BN(150 * 10 ** raydiumDecimals);
     const [orderAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from(CONSTANTS.ORDER_AUTHORITY_SEED), order.publicKey.toBuffer()],
@@ -277,6 +314,9 @@ describe("caliber-payment", () => {
       units: 1000000,
     });
     const matchOrderIns = await program.methods.userMatchOrder(yAmount).accounts({
+      config,
+      feeRecipient,
+      feeRecipientTokenYAccount: feeRecipientRaydiumTokenAccount,
       user: user2.publicKey,
       userTokenXAccount: user2TokenXAccount,
       userTokenYAccount: user2TokenYAccount,
@@ -295,13 +335,27 @@ describe("caliber-payment", () => {
     const transaction = new Transaction().add(computeBudgetIns, matchOrderIns);
     const tx = await provider.sendAndConfirm(transaction, [user2], { commitment: 'confirmed' });
     console.log("User match order success at", tx);
+    // 3% protocol fee
+    const protocolFee = new BN(50 * 3 / 100 * 10 ** raydiumDecimals);
     const user2TokenYBalanceAfter = Number((await provider.connection.getTokenAccountBalance(user2TokenYAccount)).value.amount);
     const user2TokenXBalanceAfter = Number((await provider.connection.getTokenAccountBalance(user2TokenXAccount)).value.amount);
-    assert.equal(user2TokenYBalanceBefore - user2TokenYBalanceAfter, Number(50 * 10 ** raydiumDecimals), "User token Y balance is not set correctly");
+    const feeRecipientRaydiumBalanceAfter = Number((await provider.connection.getTokenAccountBalance(feeRecipientRaydiumTokenAccount)).value.amount);
+    assert.equal(user2TokenYBalanceBefore - user2TokenYBalanceAfter, Number(50 * 10 ** raydiumDecimals) + protocolFee.toNumber(), "User token Y balance is not set correctly");
     assert.equal(user2TokenXBalanceAfter - user2TokenXBalanceBefore, Number(1.25 * 10 ** solanaDecimals), "User token X balance is not set correctly");
+    assert.equal(feeRecipientRaydiumBalanceAfter - feeRecipientRaydiumBalanceBefore, protocolFee.toNumber(), "Protocol fee is not set correctly");
   })
 
   it('User match order failed to no remain', async () => {
+    const [config] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.CONFIG_SEED)],
+      program.programId,
+    );
+    const [feeRecipient] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.FEE_RECIPIENT_SEED)],
+      program.programId,
+    );
+    const feeRecipientSolanaTokenAccount = await getAssociatedTokenAddress(solanaMint, feeRecipient, true);
+    const feeRecipientRaydiumTokenAccount = await getAssociatedTokenAddress(raydiumMint, feeRecipient, true);
     const yAmount = new BN(150 * 10 ** raydiumDecimals);
     const [orderAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from(CONSTANTS.ORDER_AUTHORITY_SEED), order.publicKey.toBuffer()],
@@ -324,6 +378,9 @@ describe("caliber-payment", () => {
       units: 1000000,
     });
     const matchOrderIns = await program.methods.userMatchOrder(yAmount).accounts({
+      config,
+      feeRecipient,
+      feeRecipientTokenYAccount: feeRecipientRaydiumTokenAccount,
       user: user2.publicKey,
       userTokenXAccount: user2TokenXAccount,
       userTokenYAccount: user2TokenYAccount,
@@ -381,6 +438,49 @@ describe("caliber-payment", () => {
     const userTokenYBalanceAfter = Number((await provider.connection.getTokenAccountBalance(userTokenYAccount)).value.amount);
     assert.equal(userTokenXBalanceAfter - userTokenXBalanceBefore, Number(0 * 10 ** solanaDecimals), "User token X balance is not set correctly");
     assert.equal(userTokenYBalanceAfter, Number(200 * 10 ** raydiumDecimals), "User token Y balance is not set correctly");
+  })
+
+  it('Admin claim fee', async () => {
+    const [feeRecipient] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.FEE_RECIPIENT_SEED)],
+      program.programId,
+    );
+    const [config] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.CONFIG_SEED)],
+      program.programId,
+    );
+    const feeRecipientRaydiumTokenAccount = await getAssociatedTokenAddress(raydiumMint, feeRecipient, true);
+    const adminTokenAccount = await getAssociatedTokenAddress(raydiumMint, admin.publicKey);
+    const [orderAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(CONSTANTS.ORDER_AUTHORITY_SEED), order.publicKey.toBuffer()],
+      program.programId,
+    );
+    const feeRecipientRaydiumBalanceBefore = Number((await provider.connection.getTokenAccountBalance(feeRecipientRaydiumTokenAccount)).value.amount);
+
+    const computeBudgetIns = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1000000,
+    });
+
+    const claimFeeIns = await program.methods.adminClaimFee().accounts({
+      config,
+      admin: admin.publicKey,
+      feeRecipient,
+      feeRecipientTokenAccount: feeRecipientRaydiumTokenAccount,
+      adminTokenAccount: adminTokenAccount,
+      allowedToken: raydiumMint,
+    })
+      .instruction()
+
+    const transaction = new Transaction().add(computeBudgetIns, claimFeeIns);
+    try {
+      const tx = await provider.sendAndConfirm(transaction, [], { commitment: 'confirmed' });
+      console.log("Admin claim fee success at", tx);
+    } catch (e) {
+      console.log(e);
+    }
+    const feeRecipientRaydiumBalanceAfter = Number((await provider.connection.getTokenAccountBalance(feeRecipientRaydiumTokenAccount)).value.amount);
+    // Total 200 Raydium => 3% protocol fee => 6 Raydium
+    assert.equal(feeRecipientRaydiumBalanceAfter - feeRecipientRaydiumBalanceBefore, -Number(6 * 10 ** raydiumDecimals), "Fee recipient token Y balance is not set correctly");
   })
 });
 

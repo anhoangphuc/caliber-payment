@@ -25,4 +25,6 @@ pub enum PaymentError {
     NoTokenXAmount,
     #[msg("Invalid order authority")]
     InvalidOrderAuthority,
+    #[msg("Invalid fee recipient")]
+    InvalidFeeRecipient,
 }
